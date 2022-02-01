@@ -25,7 +25,10 @@ source-repository head
 
 library
   exposed-modules:
+      Inductive
       Lib
+      Trans
+      Trans.Class
   other-modules:
       Paths_modules
   hs-source-dirs:
