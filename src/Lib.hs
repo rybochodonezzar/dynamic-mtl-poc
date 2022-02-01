@@ -1,5 +1,6 @@
-{-# LANGUAGE GADTs, ConstraintKinds, DataKinds, AllowAmbiguousTypes, FlexibleInstances, KindSignatures, TypeOperators, TypeFamilies, QuantifiedConstraints, FlexibleContexts, UndecidableInstances, UndecidableSuperClasses, RankNTypes, BlockArguments, ApplicativeDo, PolyKinds, FunctionalDependencies #-}
+{-# LANGUAGE GADTs, ConstraintKinds, DataKinds, AllowAmbiguousTypes, FlexibleInstances, KindSignatures, TypeOperators, TypeFamilies, QuantifiedConstraints, FlexibleContexts, UndecidableInstances, UndecidableSuperClasses, RankNTypes, BlockArguments, PolyKinds, FunctionalDependencies #-}
 {-# LANGUAGE ScopedTypeVariables, TypeApplications, PartialTypeSignatures, LiberalTypeSynonyms, LambdaCase #-}
+-- {-# LANGUAGE ApplicativeDo #-} -- with this on it loops forever, dunno why
 module Lib
     ( someFunc
     ) where
@@ -133,7 +134,7 @@ unload' = unload >>= \case
 
 printme :: DEff IO ()
 printme = do
-  mm <- liftD @'[MonadIO] $ (liftIO $ putStrLn "dupa")
+  mm <- liftD @'[MonadIO, MonadReader Int] $ ask @Int >>= liftIO . print
   -- let m :: forall m . MonadIO m => m ()
   --     m = liftIO $ putStrLn "foo"
 
@@ -146,5 +147,9 @@ someFunc :: IO ()
 someFunc = interpret ioHandler do
   liftBaseD $ putStrLn "hello"
   unload'
+  printme
   load @'[MonadReader Int] @(ReaderT Int) $ flip runReaderT 3
+  printme
+  unload'
+  load @'[MonadReader Int] @(ReaderT Int) $ flip runReaderT 7
   printme
