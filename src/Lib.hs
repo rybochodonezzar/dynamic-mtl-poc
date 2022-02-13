@@ -19,20 +19,20 @@ import Inductive
 import Trans
 import Trans.Class
 
-data H2 b m where
-  HBase  :: (MonadBase m m, Typeable m) => TypeRep m -> DictCache m cs -> H2 m m
+data Handlers b m where
+  HBase  :: (MonadBase m m, Typeable m) => TypeRep m -> DictCache m cs -> Handlers m m
   HTrans :: forall t b m cs .
           ( MonadBase b (t m)
           , MonadTrans t
-          ) => (forall f x . t f x -> f x) -> TypeRep (t m) -> DictCache (t m) cs -> H2 b m -> H2 b (t m)
+          ) => (forall f x . t f x -> f x) -> TypeRep (t m) -> DictCache (t m) cs -> Handlers b m -> Handlers b (t m)
 
-instance HasDict (MonadBase b m) (H2 b m) where
+instance HasDict (MonadBase b m) (Handlers b m) where
   evidence (HBase _ _)      = Dict
   evidence (HTrans _ _ _ _) = Dict
 
 data DEff b a where
-  Pure   :: (forall m . H2 b m -> m a) -> DEff b a
-  Free   :: (forall m . H2 b m -> m (DEff b a)) -> DEff b a
+  Pure   :: (forall m . Handlers b m -> m a) -> DEff b a
+  Free   :: (forall m . Handlers b m -> m (DEff b a)) -> DEff b a
   Unload :: (Bool -> DEff b a) -> DEff b a
   Load   :: forall cs t b a .
           ( MonadTrans t
@@ -41,7 +41,7 @@ data DEff b a where
             -> (forall m . Dict (Monad m) -> DictCache (t m) cs) 
             -> TypeRep t -> DEff b a -> DEff b a
 
-interpret :: forall b m a . (MonadBase b m) => H2 b m -> DEff b a -> m a
+interpret :: forall b m a . (MonadBase b m) => Handlers b m -> DEff b a -> m a
 interpret hs (Pure k) = k hs
 interpret hs (Free k) = interpret hs =<< k hs
 interpret hs@(HBase tm dcx) (Load i dcy tt m) =
@@ -124,7 +124,7 @@ liftD2 (Require mf) = Pure \case
 liftBaseD :: b a -> DEff b a
 liftBaseD m = Pure \hs -> liftBase m \\ hs
 
-ioHandler :: H2 IO IO
+ioHandler :: Handlers IO IO
 ioHandler = HBase typeRep $ mkDCache @'[MonadIO]
 
 unload' :: DEff IO ()
@@ -132,12 +132,9 @@ unload' = unload >>= \case
   True  -> liftBaseD $ putStrLn "unload OK"
   False -> liftBaseD $ putStrLn "falied to unload: empty stack"
 
-printme :: DEff IO ()
+printme :: forall (a :: *) . (Typeable a, Show a) => DEff IO ()
 printme = do
-  mm <- liftD @'[MonadIO, MonadReader Int] $ ask @Int >>= liftIO . print
-  -- let m :: forall m . MonadIO m => m ()
-  --     m = liftIO $ putStrLn "foo"
-
+  mm <- liftD @'[MonadIO, MonadReader a] $ ask @a >>= liftIO . print
   case mm of
     Nothing -> liftBaseD $ putStrLn "printme failed"
     Just () -> return ()
@@ -147,9 +144,15 @@ someFunc :: IO ()
 someFunc = interpret ioHandler do
   liftBaseD $ putStrLn "hello"
   unload'
-  printme
+  printme @Int
   load @'[MonadReader Int] @(ReaderT Int) $ flip runReaderT 3
-  printme
+  printme @Int
   unload'
   load @'[MonadReader Int] @(ReaderT Int) $ flip runReaderT 7
-  printme
+  printme @Int
+  load @'[MonadReader Int] @(ReaderT Int) $ flip runReaderT 9
+  printme @Int
+  unload'
+  load @'[MonadReader String] @(ReaderT String) $ flip runReaderT "foo"
+  printme @String
+  printme @Int
